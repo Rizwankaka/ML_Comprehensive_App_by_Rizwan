@@ -1,10 +1,16 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import plotly.express as px
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder
+from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.linear_model import LinearRegression, Ridge, Lasso
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.impute import SimpleImputer
 
 # Function to load sample data
 def load_sample_data(dataset_name):
@@ -16,11 +22,9 @@ def load_sample_data(dataset_name):
 # Basic EDA function
 def perform_eda(dataframe):
     st.write("Basic EDA Results")
-
     # Display summary statistics
     st.write("Summary Statistics:")
     st.write(dataframe.describe())
-
     # Display distribution of numerical data
     st.write("Data Distributions:")
     numerical_columns = dataframe.select_dtypes(include=['float64', 'int64']).columns
@@ -29,7 +33,6 @@ def perform_eda(dataframe):
         fig, ax = plt.subplots()
         sns.histplot(dataframe[column], kde=True, ax=ax)
         st.pyplot(fig)
-
     # Display correlation matrix for numeric columns only
     st.write("Correlation Matrix:")
     numeric_df = dataframe.select_dtypes(include=['float64', 'int64'])
@@ -42,9 +45,7 @@ def perform_eda(dataframe):
 
 # Function to dynamically generate plots based on user input
 def generate_plots(dataframe):
-    # User selects columns to plot
     columns_to_plot = st.multiselect("Select the data columns to plot:", dataframe.columns)
-
     if columns_to_plot:
         data_types = dataframe[columns_to_plot].dtypes
         num_numeric = sum(pd.api.types.is_numeric_dtype(t) for t in data_types)
@@ -90,63 +91,91 @@ def generate_plot(dataframe, columns_to_plot, plot_type, num_numeric, num_catego
 
     st.plotly_chart(fig)
 
-# Function to encode categorical variables
-def encode_categorical_variables(dataframe):
-    st.write("Categorical Encoding")
-    # Divide columns into categorical and numerical
-    categorical_columns = dataframe.select_dtypes(include=['object', 'category']).columns.tolist()
-    numerical_columns = dataframe.select_dtypes(exclude=['object', 'category']).columns.tolist()
 
-    st.write(f"Categorical Columns: {categorical_columns}")
-    st.write(f"Numerical Columns: {numerical_columns}")
+# Function to encode categorical variables for feature set
+def encode_features(X):
+    categorical_columns = X.select_dtypes(include=['object', 'category']).columns.tolist()
+    X = pd.get_dummies(X, columns=categorical_columns, drop_first=True)
+    return X
 
-    # Ask user for encoding method
-    encoding_method = st.selectbox("Select the encoding method:", ["Label Encoder", "One Hot Encoding"])
+# Handle missing values in the dataframe
+def handle_missing_values(dataframe):
+    st.write("Handle Missing Values")
 
-    if st.button("Encode Categories"):
-        if encoding_method == "Label Encoder":
-            encoder = LabelEncoder()
-            for col in categorical_columns:
-                dataframe[col] = encoder.fit_transform(dataframe[col])
-        elif encoding_method == "One Hot Encoding":
-            dataframe = pd.get_dummies(dataframe, columns=categorical_columns)
+    if dataframe.isnull().values.any():
+        option = st.selectbox("Select how to handle missing values:", ["Drop rows with missing values", "Fill missing values"])
+        if option == "Drop rows with missing values":
+            dataframe.dropna(inplace=True)
+            st.write("Rows with missing values have been dropped.")
+        elif option == "Fill missing values":
+            num_imputer = SimpleImputer(strategy="mean")
+            cat_imputer = SimpleImputer(strategy="most_frequent")
 
-        st.write("Data Preview after Encoding:")
-        st.write(dataframe.head())
+            for col in dataframe.columns:
+                if dataframe[col].dtype == np.number:
+                    dataframe[col] = num_imputer.fit_transform(dataframe[[col]])
+                else:
+                    dataframe[col] = cat_imputer.fit_transform(dataframe[[col]])
+            st.write("Missing values have been filled.")
+    else:
+        st.write("No missing values detected.")
+    return dataframe
 
-# Function to select features and target, and determine problem type
-def select_features_target(dataframe):
+# Modified function to include encoding for features before training models
+def select_features_target_and_train_models(dataframe):
     st.write("Machine Learning Task Setup")
-
     all_columns = dataframe.columns.tolist()
     X_columns = st.multiselect("Select feature columns (X):", all_columns, default=all_columns[:-1])
     y_column = st.selectbox("Select target column (y):", all_columns, index=len(all_columns)-1)
 
-    # Determine if the task is classification or regression
-    if dataframe[y_column].dtype == 'object' or dataframe[y_column].dtype.name == 'category':
-        st.markdown("<h2 style='text-align: center; color: yellow;'>This is a Classification Problem</h2>", unsafe_allow_html=True)
-    else:
-        st.markdown("<h2 style='text-align: center; color: green;'>This is a Regression Problem</h2>", unsafe_allow_html=True)
-    
-    # Ask user to select the ratio for train-test split
-    test_ratio = st.slider("Select test split ratio:", 0.1, 0.5, 0.2, 0.05)
+    X = dataframe[X_columns]
+    y = dataframe[y_column].astype(np.float64)
+    # Encode categorical features
+    X_encoded = encode_features(X)
 
-    if st.button("Split Data"):
-        X = dataframe[X_columns]
-        y = dataframe[y_column]
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_ratio, random_state=42)
-        st.write(f"Training set size: {X_train.shape[0]} rows")
-        st.write(f"Test set size: {X_test.shape[0]} rows")
+    problem_type = "classification" if y.dtype == 'object' or y.dtype.name == 'category' else "regression"
+    if problem_type == "regression":
+        st.markdown("<h2 style='text-align: center; color: green;'>This is a Regression Problem</h2>", unsafe_allow_html=True)
+        regression_models = st.multiselect("Select regression models to train:", ["Linear Regression", "Ridge", "Lasso", "Decision Tree", "Random Forest"])
+        test_ratio = st.slider("Select test split ratio:", 0.1, 0.5, 0.2, 0.05)
+
+        if st.button("Train Models"):
+            X_train, X_test, y_train, y_test = train_test_split(X_encoded, y, test_size=test_ratio, random_state=42)
+            results = train_and_evaluate_models(X_train, X_test, y_train, y_test, regression_models)
+            best_model = min(results, key=lambda x: x['MSE'])
+            worst_model = max(results, key=lambda x: x['MSE'])
+
+            st.write(f"Best Model: {best_model['name']} - MSE: {best_model['MSE']}, R^2: {best_model['R2']}")
+            st.write(f"Worst Model: {worst_model['name']} - MSE: {worst_model['MSE']}, R^2: {worst_model['R2']}")
+
+# Train and evaluate selected regression models
+def train_and_evaluate_models(X_train, X_test, y_train, y_test, model_names):
+    models = {
+        "Linear Regression": LinearRegression(),
+        "Ridge": Ridge(),
+        "Lasso": Lasso(),
+        "Decision Tree": DecisionTreeRegressor(),
+        "Random Forest": RandomForestRegressor()
+    }
+
+    results = []
+
+    for name in model_names:
+        model = models[name]
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        mse = mean_squared_error(y_test, y_pred)
+        r2 = r2_score(y_test, y_pred)
+        results.append({"name": name, "MSE": mse, "R2": r2})
+
+    return results
 
 # Streamlit UI setup
 st.title("Data Analysis Web Application")
-
-# Data upload
 uploaded_file = st.file_uploader("Upload your CSV data", type=["csv"])
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
 else:
-    # Sample data selection
     sample_data = st.selectbox("Or, choose a sample dataset:", ["", "tips", "titanic"])
     if sample_data:
         df = load_sample_data(sample_data)
@@ -154,8 +183,8 @@ else:
         df = None
 
 if df is not None:
+    df = handle_missing_values(df)  # Handle missing values right after data loading
     if st.button("Perform Basic EDA"):
         perform_eda(df)
     generate_plots(df)
-    encode_categorical_variables(df)
-    select_features_target(df)
+    select_features_target_and_train_models(df)
