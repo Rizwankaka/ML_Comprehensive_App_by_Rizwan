@@ -1,5 +1,3 @@
-# packages in environment at C:\Users\Tesla Laptops\.conda\envs\streamlit_env:
-#
 # Name                    Version                   Build  Channel
 altair                    5.2.0              pyhd8ed1ab_0    conda-forge
 asttokens                 2.4.1              pyhd8ed1ab_0    conda-forge
