@@ -4,7 +4,8 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import plotly.express as px
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
+from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score, accuracy_score, precision_score, f1_score
 from sklearn.linear_model import LinearRegression, Ridge, Lasso, LogisticRegression, SGDClassifier
@@ -47,8 +48,7 @@ def perform_eda(dataframe):
         st.write("No numeric columns available for correlation matrix.")
 
 # Function to dynamically generate plots based on user input
-def generate_plots(dataframe):
-    columns_to_plot = st.multiselect("Select the data columns to plot:", dataframe.columns)
+def generate_plots(dataframe, columns_to_plot):
     if columns_to_plot:
         data_types = dataframe[columns_to_plot].dtypes
         num_numeric = sum(pd.api.types.is_numeric_dtype(t) for t in data_types)
@@ -69,9 +69,9 @@ def generate_plots(dataframe):
                 plot_options += ["Facet Grid"]
 
         plot_type = st.selectbox("Select plot type:", plot_options)
-        generate_plot(dataframe, columns_to_plot, plot_type, num_numeric, num_categorical)
+        generate_individual_plot(dataframe, columns_to_plot, plot_type, num_numeric, num_categorical)
 
-def generate_plot(dataframe, columns_to_plot, plot_type, num_numeric, num_categorical):
+def generate_individual_plot(dataframe, columns_to_plot, plot_type, num_numeric, num_categorical):
     if plot_type == "Histogram":
         fig = px.histogram(dataframe, x=columns_to_plot[0])
     elif plot_type == "Box Plot":
@@ -98,28 +98,85 @@ def encode_features(X):
     categorical_columns = X.select_dtypes(include=['object', 'category']).columns.tolist()
     X = pd.get_dummies(X, columns=categorical_columns, drop_first=True)
     return X
+# Function to visualize encoding of categorical variables
+def visualize_encoding(dataframe):
+    st.sidebar.write("## Encoding Visualization")
+
+    # Select categorical columns to encode
+    categorical_columns = dataframe.select_dtypes(include=['object', 'category']).columns.tolist()
+    if not categorical_columns:
+        st.sidebar.write("No categorical columns to encode.")
+        return
+
+    columns_to_encode = st.sidebar.multiselect("Select categorical columns to encode:", categorical_columns, key='encode_cols')
+    encoding_method = st.sidebar.selectbox("Select encoding method:", ["get_dummies", "Label Encoding", "One-Hot Encoding"], key='encode_method')
+
+    if columns_to_encode:
+        if encoding_method == "get_dummies":
+            # Perform one-hot encoding using get_dummies
+            encoded_df = pd.get_dummies(dataframe, columns=columns_to_encode)
+        elif encoding_method == "Label Encoding":
+            # Perform label encoding
+            le = LabelEncoder()
+            encoded_df = dataframe.copy()
+            for col in columns_to_encode:
+                encoded_df[col] = le.fit_transform(encoded_df[col])
+        elif encoding_method == "One-Hot Encoding":
+            # Perform one-hot encoding using OneHotEncoder from sklearn
+            ohe = OneHotEncoder(sparse=False)
+            encoded_values = ohe.fit_transform(dataframe[columns_to_encode])
+            # Create a DataFrame with the encoded variables
+            encoded_vars = pd.DataFrame(encoded_values, columns=np.concatenate(ohe.categories_))
+            encoded_df = dataframe.join(encoded_vars).drop(columns=columns_to_encode)
+            # Reset index to align rows
+            encoded_df.reset_index(drop=True, inplace=True)
+
+        # Display original and encoded data side by side for comparison
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write("Original Data")
+            st.dataframe(dataframe[columns_to_encode].head())
+        with col2:
+            st.write("Encoded Data")
+            if encoding_method == "get_dummies":
+                # Display only the newly created dummy columns
+                dummy_columns = [col for col in encoded_df if col.startswith(tuple(columns_to_encode))]
+                st.dataframe(encoded_df[dummy_columns].head())
+            else:
+                # For Label Encoding and One-Hot Encoding, display the modified dataframe
+                if encoding_method == "Label Encoding":
+                    st.dataframe(encoded_df[columns_to_encode].head())
+                elif encoding_method == "One-Hot Encoding":
+                    st.dataframe(encoded_df[list(encoded_vars.columns)].head())
+
 
 # Handle missing values in the dataframe
-def handle_missing_values(dataframe):
+def handle_missing_values(dataframe, option):
     st.write("Handle Missing Values")
 
     if dataframe.isnull().values.any():
-        option = st.selectbox("Select how to handle missing values:", ["Drop rows with missing values", "Fill missing values"])
         if option == "Drop rows with missing values":
             dataframe.dropna(inplace=True)
-            st.write("Rows with missing values have been dropped.")
+            st.sidebar.write("Rows with missing values have been dropped.")
         elif option == "Fill missing values":
+            # Create imputers
             num_imputer = SimpleImputer(strategy="mean")
             cat_imputer = SimpleImputer(strategy="most_frequent")
 
             for col in dataframe.columns:
-                if dataframe[col].dtype == np.number:
-                    dataframe[col] = num_imputer.fit_transform(dataframe[[col]])
-                else:
-                    dataframe[col] = cat_imputer.fit_transform(dataframe[[col]])
-            st.write("Missing values have been filled.")
+                if dataframe[col].dtype == "number":  # Numeric columns
+                    dataframe[col] = num_imputer.fit_transform(dataframe[[col]]).ravel()
+                elif dataframe[col].dtype == "bool":  # Boolean columns, treated as categorical
+                    # Temporarily convert boolean to object for imputation
+                    dataframe[col] = dataframe[col].astype(object)
+                    dataframe[col] = cat_imputer.fit_transform(dataframe[[col]]).ravel()
+                    # Optionally convert back to boolean
+                    dataframe[col] = dataframe[col].astype(bool)
+                else:  # Categorical/object columns
+                    dataframe[col] = cat_imputer.fit_transform(dataframe[[col]]).ravel()
+            st.sidebar.write("Missing values have been filled.")
     else:
-        st.write("No missing values detected.")
+        st.sidebar.write("No missing values detected.")
     return dataframe
 
 # Modified function to include encoding for features before training models
@@ -219,19 +276,41 @@ def train_and_evaluate_classification_models(X_train, X_test, y_train, y_test, m
 
 # Streamlit UI setup
 st.title("Data Analysis Web Application")
-uploaded_file = st.file_uploader("Upload your CSV data", type=["csv"])
+
+uploaded_file = st.sidebar.file_uploader("Upload your CSV data", type=["csv"])
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
 else:
-    sample_data = st.selectbox("Or, choose a sample dataset:", ["", "tips", "titanic"])
+    sample_data = st.sidebar.selectbox("Choose a sample dataset:", ["", "tips", "titanic"])
     if sample_data:
         df = load_sample_data(sample_data)
     else:
         df = None
 
 if df is not None:
-    df = handle_missing_values(df)  # Handle missing values right after data loading
-    if st.button("Perform Basic EDA"):
+    # Handling missing values option in sidebar
+    missing_value_handling_option = st.sidebar.selectbox(
+        "Handle Missing Values",
+        ["", "Drop rows with missing values", "Fill missing values"]
+    )
+    if missing_value_handling_option != "":
+        df = handle_missing_values(df, missing_value_handling_option)
+    
+    # Perform EDA button in sidebar
+    if st.sidebar.button("Perform Basic EDA"):
         perform_eda(df)
-    generate_plots(df)
-    select_features_target_and_train_models(df)
+    
+    # Optional Encoding Visualization in sidebar
+    if st.sidebar.checkbox("Show Encoding Visualization"):
+        visualize_encoding(df)  # Adjusted to be called when checkbox is checked
+
+    # Selecting data columns to plot in sidebar
+    columns_to_plot = st.sidebar.multiselect("Select columns to plot:", df.columns, key='plot')
+    if columns_to_plot:
+        generate_plots(df, columns_to_plot)
+    
+    # Machine Learning Task Setup in sidebar
+    if st.sidebar.checkbox("Setup Machine Learning Task"):
+        select_features_target_and_train_models(df)
+else:
+    st.write("Please upload a dataset or select a sample dataset to begin.")
