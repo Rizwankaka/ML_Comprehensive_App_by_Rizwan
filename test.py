@@ -54,3 +54,19 @@ else:
         st.write('---')
         st.header('**Pandas Profiling Report**')
         st_profile_report(pr)
+
+import streamlit as st
+
+def set_png_as_page_bg():
+    page_bg_img = '''
+    <style>
+    body {
+    background-image: url("https://images.unsplash.com/photo-1472289065668-ce650ac443d2?q=80&w=2069&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA");
+    background-size: cover;
+    }
+    </style>
+    '''
+    
+    st.markdown(page_bg_img, unsafe_allow_html=True)
+
+set_png_as_page_bg()
