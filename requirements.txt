@@ -20,3 +20,4 @@ seaborn
 streamlit
 ydata-profiling
 streamlit-pandas-profiling
+pydantic_settings
