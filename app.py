@@ -4,6 +4,9 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import plotly.express as px
+from pydantic_settings import BaseSettings
+from ydata_profiling import ProfileReport
+from streamlit_pandas_profiling import st_profile_report
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, mean_absolute_percentage_error
@@ -23,31 +26,41 @@ def load_sample_data(dataset_name):
         return sns.load_dataset('tips')
     elif dataset_name == 'titanic':
         return sns.load_dataset('titanic')
+    elif dataset_name == 'iris':
+        # This will load the Iris dataset
+        return sns.load_dataset('iris')
 
 # Basic EDA function
+# def perform_eda(dataframe):
+    # st.write("Basic EDA Results")
+    # # Display summary statistics
+    # st.write("Summary Statistics:")
+    # st.write(dataframe.describe())
+    # # Display distribution of numerical data
+    # st.write("Data Distributions:")
+    # numerical_columns = dataframe.select_dtypes(include=['float64', 'int64']).columns
+    # for column in numerical_columns:
+    #     st.write(f"Distribution for {column}:")
+    #     fig, ax = plt.subplots()
+    #     sns.histplot(dataframe[column], kde=True, ax=ax)
+    #     st.pyplot(fig)
+    # # Display correlation matrix for numeric columns only
+    # st.write("Correlation Matrix:")
+    # numeric_df = dataframe.select_dtypes(include=['float64', 'int64'])
+    # if not numeric_df.empty:
+    #     fig, ax = plt.subplots()
+    #     sns.heatmap(numeric_df.corr(), annot=True, fmt=".2f", cmap="coolwarm", ax=ax)
+    #     st.pyplot(fig)
+    # else:
+    #     st.write("No numeric columns available for correlation matrix.")
 def perform_eda(dataframe):
-    st.write("Basic EDA Results")
-    # Display summary statistics
-    st.write("Summary Statistics:")
-    st.write(dataframe.describe())
-    # Display distribution of numerical data
-    st.write("Data Distributions:")
-    numerical_columns = dataframe.select_dtypes(include=['float64', 'int64']).columns
-    for column in numerical_columns:
-        st.write(f"Distribution for {column}:")
-        fig, ax = plt.subplots()
-        sns.histplot(dataframe[column], kde=True, ax=ax)
-        st.pyplot(fig)
-    # Display correlation matrix for numeric columns only
-    st.write("Correlation Matrix:")
-    numeric_df = dataframe.select_dtypes(include=['float64', 'int64'])
-    if not numeric_df.empty:
-        fig, ax = plt.subplots()
-        sns.heatmap(numeric_df.corr(), annot=True, fmt=".2f", cmap="coolwarm", ax=ax)
-        st.pyplot(fig)
-    else:
-        st.write("No numeric columns available for correlation matrix.")
-
+    st.write("Basic EDA Results with Pandas Profiling")
+    
+    # Generate the Pandas Profiling report
+    profile = ProfileReport(dataframe, explorative=True, minimal=True)
+    
+    # Display the report in the Streamlit app
+    st_profile_report(profile)
 # Function to dynamically generate plots based on user input
 def generate_plots(dataframe, columns_to_plot):
     if columns_to_plot:
@@ -124,8 +137,8 @@ def visualize_encoding(dataframe):
             for col in columns_to_encode:
                 encoded_df[col] = le.fit_transform(encoded_df[col])
         elif encoding_method == "One-Hot Encoding":
-            # Perform one-hot encoding using OneHotEncoder from sklearn
-            ohe = OneHotEncoder(sparse=False)
+            # Perform one-hot encoding using OneHotEncoder from sklearn with updated parameter
+            ohe = OneHotEncoder(sparse_output=False)
             encoded_values = ohe.fit_transform(dataframe[columns_to_encode])
             # Create a DataFrame with the encoded variables
             encoded_vars = pd.DataFrame(encoded_values, columns=np.concatenate(ohe.categories_))
@@ -150,6 +163,7 @@ def visualize_encoding(dataframe):
                     st.dataframe(encoded_df[columns_to_encode].head())
                 elif encoding_method == "One-Hot Encoding":
                     st.dataframe(encoded_df[list(encoded_vars.columns)].head())
+
 
 # Handle missing values in the dataframe
 def handle_missing_values(dataframe, option):
@@ -321,6 +335,7 @@ def train_and_evaluate_classification_models(X_train, X_test, y_train, y_test, m
 
     return pd.DataFrame(results)
 
+
 # Streamlit UI setup
 st.title("Data Analysis Web Application")
 
@@ -328,7 +343,7 @@ uploaded_file = st.sidebar.file_uploader("Upload your CSV data", type=["csv"])
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
 else:
-    sample_data = st.sidebar.selectbox("Choose a sample dataset:", ["", "tips", "titanic"])
+    sample_data = st.sidebar.selectbox("Choose a sample dataset:", ["", "tips", "titanic", "iris"])
     if sample_data:
         df = load_sample_data(sample_data)
     else:
