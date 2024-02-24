@@ -337,7 +337,7 @@ def train_and_evaluate_classification_models(X_train, X_test, y_train, y_test, m
 
 
 # Streamlit UI setup
-st.title("Data Analysis Web Application")
+st.title("📊Data Analysis Web Application🚀")
 
 uploaded_file = st.sidebar.file_uploader("Upload your CSV data", type=["csv"])
 if uploaded_file is not None:
@@ -376,3 +376,35 @@ if df is not None:
         select_features_target_and_train_models(df)
 else:
     st.write("Please upload a dataset or select a sample dataset to begin.")
+# Add your contact details at the bottom of the sidebar
+contact_info = """
+#### Contact Information
+
+**Author:** Rizwan
+
+**GitHub:** [![GitHub](https://img.shields.io/badge/GitHub-Profile-blue?style=for-the-badge&logo=github)](https://github.com/Rizwankaka)
+
+**LinkedIn:** [![LinkedIn](https://img.shields.io/badge/LinkedIn-Profile-blue?style=for-the-badge&logo=linkedin)](https://www.linkedin.com/in/rizwan-rizwan-1351a650/)
+
+**Twitter:** [![Twitter](https://img.shields.io/badge/Twitter-Profile-blue?style=for-the-badge&logo=twitter)](https://twitter.com/RizwanRizwan_)
+
+**Facebook:** [![Facebook](https://img.shields.io/badge/Facebook-Profile-blue?style=for-the-badge&logo=facebook)](https://www.facebook.com/RIZWANNAZEEER)
+
+**Gmail:** [![Gmail](https://img.shields.io/badge/Gmail-Contact%20Me-red?style=for-the-badge&logo=gmail)](mailto:riwan.rewala@gmail.com)
+"""
+
+st.sidebar.markdown(contact_info, unsafe_allow_html=True)
+
+# Custom CSS to inject for setting a background image from a URL
+background_image_css = """
+<style>
+body {
+    color: #fff;
+    background-image: url('https://unsplash.com/photos/two-gray-pencils-on-yellow-surface-1_CMoFsPfso');
+    background-size: cover;
+    background-position: center;
+}
+</style>
+"""
+
+st.markdown(background_image_css, unsafe_allow_html=True)
